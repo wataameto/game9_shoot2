@@ -85,6 +85,7 @@ const speedLinesData = [];          // Speed lines tracking data
 let playerGroup;        // Contains cockpit, wings, engines, lights
 let engineFlameParticles = [];
 const lasers = [];
+const missiles = [];
 const enemies = [];
 const enemyProjectiles = []; // Track enemy bullet meshes and velocities
 const explosions = [];
@@ -1016,16 +1017,23 @@ function updateEngineFlame(dt, playerPos) {
     
     const flame = new THREE.Mesh(geom, mat);
     
+    // Calculate direction directly opposite to ship's current rotation (Yaw)
+    const yaw = playerGroup ? playerGroup.rotation.y : 0;
+    const blowDir = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
+    
     // Select left or right nozzle offset based on twin-engine design
     const sideX = Math.random() < 0.5 ? -0.6 : 0.6;
-    const offsetZ = 3.3; // Local Z offset to nozzles
+    
+    // Twin engine nozzle positions in local coordinates
+    const localOffset = new THREE.Vector3(sideX * scale, 0, 3.3 * scale);
+    localOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
     
     // Spawn just behind nozzle tips
-    flame.position.set(
-      playerPos.x + sideX * scale + (Math.random() - 0.5) * 0.12 * scale,
-      playerPos.y + (Math.random() - 0.5) * 0.12 * scale,
-      playerPos.z + offsetZ * scale
-    );
+    flame.position.copy(playerPos).add(localOffset).add(new THREE.Vector3(
+      (Math.random() - 0.5) * 0.12 * scale,
+      (Math.random() - 0.5) * 0.12 * scale,
+      0
+    ));
     
     scene.add(flame);
     
@@ -1036,10 +1044,14 @@ function updateEngineFlame(dt, playerPos) {
       z: Math.random() * 5
     };
     
+    // Compute velocity (blow backwards from nozzle)
+    const speed = 35 + Math.random() * 20;
+    const velocity = blowDir.multiplyScalar(speed);
+    
     engineFlameParticles.push({
       mesh: flame,
       spinSpeed,
-      velocityZ: 35 + Math.random() * 20, // Fly backwards
+      velocity: velocity,
       life: 0.0,
       maxLife: 0.25 // Fade quickly
     });
@@ -1061,8 +1073,10 @@ function updateEngineFlame(dt, playerPos) {
       p.mesh.scale.setScalar(1.0 - pct);
       p.mesh.material.opacity = (1.0 - pct) * 0.8;
       
-      // Move backwards
-      p.mesh.position.z += p.velocityZ * dt;
+      // Move relative to camera/player motion
+      const relVelocity = new THREE.Vector3().copy(p.velocity).addScaledVector(state.velocity, -1);
+      p.mesh.position.addScaledVector(relVelocity, dt);
+      
       p.mesh.rotation.x += p.spinSpeed.x * dt;
       p.mesh.rotation.y += p.spinSpeed.y * dt;
     }
@@ -1248,7 +1262,7 @@ function fireLaser() {
   state.lastFireTime = now;
   playLaserSound();
 
-  const laserColor = state.weaponLevel === 1 ? 0xff007f : (state.weaponLevel === 2 ? 0xffea00 : 0xbd93f9);
+  const laserColor = state.weaponLevel === 1 ? 0xff007f : (state.weaponLevel === 2 ? 0xffea00 : (state.weaponLevel === 3 ? 0xbd93f9 : 0x00f0ff));
   const laserMat = new THREE.MeshBasicMaterial({ color: laserColor });
   
   // Dimension of laser bolt
@@ -1263,7 +1277,7 @@ function fireLaser() {
   const upAxis = new THREE.Vector3(0, 1, 0);
   const scale = state.gameMode === '2D' ? 0.6 : 1.0;
 
-  if (state.weaponLevel === 1 || state.weaponLevel === 3) {
+  if (state.weaponLevel === 1 || state.weaponLevel === 3 || state.weaponLevel === 4) {
     // Center shot: offset (0, 0, -2) in local space, scaled
     const localOffset = new THREE.Vector3(0, state.gameMode === '3D' ? 0.1 : 0, -2 * scale);
     localOffset.applyAxisAngle(upAxis, shipYaw);
@@ -1304,8 +1318,8 @@ function fireLaser() {
     rightLaser.scale.set(scale, scale, scale); // Scale laser mesh
     scene.add(rightLaser);
 
-    // Spread slightly outward in LV3
-    const spreadX = state.weaponLevel === 3 ? 6.0 : 0.0;
+    // Spread slightly outward in LV3 and LV4
+    const spreadX = state.weaponLevel >= 3 ? 6.0 : 0.0;
     
     const leftVelocity = new THREE.Vector3(-spreadX, 0, -GAME_CONFIG.laser.speed);
     leftVelocity.applyAxisAngle(upAxis, shipYaw);
@@ -1321,6 +1335,224 @@ function fireLaser() {
       mesh: rightLaser,
       velocity: rightVelocity
     });
+  }
+
+  // Level 4: Spawn 2 homing missiles from outer wings
+  if (state.weaponLevel === 4) {
+    const leftWingOffset = new THREE.Vector3(-3.8 * scale, state.gameMode === '3D' ? -0.15 : 0, 0);
+    leftWingOffset.applyAxisAngle(upAxis, shipYaw);
+    
+    const rightWingOffset = new THREE.Vector3(3.8 * scale, state.gameMode === '3D' ? -0.15 : 0, 0);
+    rightWingOffset.applyAxisAngle(upAxis, shipYaw);
+    
+    spawnHomingMissile(shipPos.clone().add(leftWingOffset), shipYaw, -1);
+  }
+}
+
+// ==========================================================================
+// HOMING MISSILE SYSTEMS
+// ==========================================================================
+function spawnHomingMissile(position, yaw, side) {
+  const mesh = createMissileMesh();
+  mesh.position.copy(position);
+  mesh.rotation.y = yaw;
+  scene.add(mesh);
+  
+  // Initial velocity: slightly forward and outward
+  const speed = 40;
+  const upAxis = new THREE.Vector3(0, 1, 0);
+  const localDir = new THREE.Vector3(side * 0.5, 0, -1).normalize();
+  const velocity = localDir.applyAxisAngle(upAxis, yaw).multiplyScalar(speed);
+  
+  missiles.push({
+    mesh: mesh,
+    velocity: velocity,
+    speed: speed,
+    life: 3.5 // max 3.5 seconds lifetime
+  });
+}
+
+function createMissileMesh() {
+  const group = new THREE.Group();
+  const scale = state.gameMode === '2D' ? 0.6 : 1.0;
+  
+  // Cylinder body
+  const bodyGeo = new THREE.CylinderGeometry(0.18, 0.18, 1.8, 6);
+  bodyGeo.rotateX(Math.PI / 2);
+  const bodyMat = new THREE.MeshStandardMaterial({ color: 0xe0e0e0, metalness: 0.7, roughness: 0.3 });
+  const body = new THREE.Mesh(bodyGeo, bodyMat);
+  group.add(body);
+  
+  // Red tip
+  const tipGeo = new THREE.ConeGeometry(0.18, 0.5, 6);
+  tipGeo.rotateX(Math.PI / 2);
+  tipGeo.translate(0, 0, -1.15); // front
+  const tipMat = new THREE.MeshBasicMaterial({ color: 0xff0055 });
+  const tip = new THREE.Mesh(tipGeo, tipMat);
+  group.add(tip);
+  
+  // Fins
+  const finGeo = new THREE.BoxGeometry(0.7, 0.08, 0.3);
+  finGeo.translate(0, 0, 0.75); // back
+  const finMat = new THREE.MeshBasicMaterial({ color: 0xffea00 });
+  const fin1 = new THREE.Mesh(finGeo, finMat);
+  group.add(fin1);
+  
+  const fin2 = fin1.clone();
+  fin2.rotation.z = Math.PI / 2;
+  group.add(fin2);
+
+  group.scale.set(scale, scale, scale);
+  
+  return group;
+}
+
+function spawnMissileTrail(missilePos, missileDir) {
+  if (Math.random() > 0.45) return; // limit trail density
+  
+  const is2D = state.gameMode === '2D';
+  const scale = is2D ? 0.6 : 1.0;
+  const size = (0.2 + Math.random() * 0.25) * scale;
+  const geom = new THREE.BoxGeometry(size, size, size);
+  
+  // Glowing yellow-orange exhaust trail
+  const mat = new THREE.MeshBasicMaterial({
+    color: 0xffaa00,
+    transparent: true,
+    opacity: 0.8,
+    blending: THREE.AdditiveBlending
+  });
+  
+  const trailParticle = new THREE.Mesh(geom, mat);
+  trailParticle.position.copy(missilePos).add(new THREE.Vector3(
+    (Math.random() - 0.5) * 0.25 * scale,
+    (Math.random() - 0.5) * 0.25 * scale,
+    0
+  ));
+  
+  scene.add(trailParticle);
+  
+  // Blow trail opposite to missile velocity direction
+  const blowSpeed = 12 + Math.random() * 8;
+  const velocity = new THREE.Vector3().copy(missileDir).normalize().multiplyScalar(-blowSpeed);
+  
+  engineFlameParticles.push({
+    mesh: trailParticle,
+    spinSpeed: {
+      x: Math.random() * 6,
+      y: Math.random() * 6,
+      z: Math.random() * 6
+    },
+    velocity: velocity,
+    life: 0.0,
+    maxLife: 0.32
+  });
+}
+
+function updateMissiles(dt) {
+  for (let i = missiles.length - 1; i >= 0; i--) {
+    const missile = missiles[i];
+    
+    // Find closest target (either Boss or closest Drone/Asteroid)
+    let target = null;
+    let minDist = Infinity;
+    
+    if (state.bossActive && bossGroup) {
+      const dist = missile.mesh.position.distanceTo(bossGroup.position);
+      target = bossGroup;
+      minDist = dist;
+    } else {
+      enemies.forEach(e => {
+        const dist = missile.mesh.position.distanceTo(e.mesh.position);
+        if (dist < minDist) {
+          minDist = dist;
+          target = e.mesh;
+        }
+      });
+    }
+    
+    // Adjust velocity toward target (Homing steering)
+    if (target) {
+      const targetDir = new THREE.Vector3().subVectors(target.position, missile.mesh.position).normalize();
+      const steerFactor = 5.2 * dt; // Steering responsiveness
+      
+      missile.velocity.lerp(targetDir.multiplyScalar(missile.speed), steerFactor);
+      missile.velocity.normalize().multiplyScalar(missile.speed);
+    }
+    
+    // Move relative to camera lock (synchronize with player speed)
+    const relVelocity = new THREE.Vector3().copy(missile.velocity).addScaledVector(state.velocity, -1);
+    missile.mesh.position.addScaledVector(relVelocity, dt);
+    
+    // Orient missile to face its trajectory direction
+    if (missile.velocity.lengthSq() > 0.01) {
+      const lookTarget = missile.mesh.position.clone().add(missile.velocity);
+      missile.mesh.lookAt(lookTarget);
+    }
+    
+    // Spawn fire smoke trails from missile tail
+    spawnMissileTrail(missile.mesh.position, missile.velocity);
+    
+    let exploded = false;
+    
+    // Collision checking: Boss
+    if (state.bossActive && bossGroup && missile.mesh.position.distanceTo(bossGroup.position) < 6) {
+      state.bossHP -= 4; // High missile damage
+      addScore(100);
+      triggerScreenFlash('rgba(255, 100, 0, 0.12)', 80);
+      
+      const bb = dom.bossBar;
+      if (bb) bb.style.width = `${(state.bossHP / state.bossMaxHP) * 100}%`;
+      
+      if (state.bossHP <= 0) {
+        spawnExplosion(bossGroup.position, 0xff6600, 120);
+        spawnExplosion(bossGroup.position, 0xffaa00, 80);
+        playExplosionSound();
+        triggerScreenFlash('rgba(255, 200, 0, 0.4)', 800);
+        scene.remove(bossGroup);
+        bossGroup = null;
+        state.bossActive = false;
+        const bm = dom.bossMeter;
+        if (bm) bm.style.display = 'none';
+        setTimeout(() => stageClear(), 1500);
+      }
+      
+      exploded = true;
+    } 
+    // Collision checking: Normal Enemies
+    else {
+      for (let ei = enemies.length - 1; ei >= 0; ei--) {
+        const enemy = enemies[ei];
+        if (missile.mesh.position.distanceTo(enemy.mesh.position) < enemy.radius + 1.2) {
+          enemy.hp -= 4; // High missile damage
+          triggerScreenFlash('rgba(255, 255, 255, 0.15)', 80);
+          
+          if (enemy.hp <= 0) {
+            spawnExplosion(enemy.mesh.position, enemy.type === 'ASTEROID' ? 0xffaa00 : 0x00ffff, enemy.type === 'ASTEROID' ? 30 : 15);
+            playExplosionSound();
+            scene.remove(enemy.mesh);
+            enemies.splice(ei, 1);
+            state.kills++;
+            
+            const scoreGained = enemy.type === 'ASTEROID' ? 100 : 250;
+            addScore(scoreGained);
+            
+            if (!state.bossActive && state.kills >= state.killsForBoss) {
+              setTimeout(() => spawnBoss(), 1000);
+            }
+          }
+          exploded = true;
+          break;
+        }
+      }
+    }
+    
+    missile.life -= dt;
+    if (exploded || missile.life <= 0 || missile.mesh.position.z < -300 || missile.mesh.position.z > 50) {
+      spawnExplosion(missile.mesh.position, 0xff3300, 15);
+      scene.remove(missile.mesh);
+      missiles.splice(i, 1);
+    }
   }
 }
 
@@ -1400,7 +1632,7 @@ function collectPowerup(itemType) {
     addScore(150);
     triggerScreenFlash('rgba(57, 255, 20, 0.15)', 200); // Shiny green flash on recovery
   } else if (itemType === 'WEAPON') {
-    state.weaponLevel = Math.min(3, state.weaponLevel + 1);
+    state.weaponLevel = Math.min(4, state.weaponLevel + 1);
     addScore(250);
     triggerScreenFlash('rgba(255, 234, 0, 0.15)', 200); // Cyber yellow flash on weapon upgrade
   }
@@ -1441,6 +1673,9 @@ function updateHUD() {
   } else if (state.weaponLevel === 3) {
     wName = "TRIP-BOLT STRIKER";
     dotColor = '#39ff14';
+  } else if (state.weaponLevel === 4) {
+    wName = "HYPER METEOR STORM";
+    dotColor = '#ff007f';
   }
   
   dom.hudWeaponType.textContent = wName;
@@ -1505,6 +1740,10 @@ function cleanupGameplay() {
   // Clear lasers
   lasers.forEach(l => safeMeshDispose(l.mesh));
   lasers.length = 0;
+  
+  // Clear missiles
+  missiles.forEach(m => safeMeshDispose(m.mesh));
+  missiles.length = 0;
   
   // Clear projectiles
   enemyProjectiles.forEach(p => safeMeshDispose(p.mesh));
@@ -1930,14 +2169,66 @@ function updateBoss(dt) {
   // Always face the player
   bossGroup.lookAt(playerGroup.position);
 
+  // Boss state and enrage handling (HP <= 50%)
+  const isEnraged = state.bossHP <= state.bossMaxHP * 0.5;
+  if (isEnraged && !bossGroup.userData.enraged) {
+    bossGroup.userData.enraged = true;
+    triggerScreenFlash('rgba(255, 0, 120, 0.35)', 600);
+    playPowerUpSound(); // Trigger warning chime
+  }
+
+  // Enraged visual effect (red glowing pulse on body + magenta eye)
+  if (isEnraged) {
+    const pulse = Math.abs(Math.sin(performance.now() * 0.008));
+    const bodyMesh = bossGroup.children[0];
+    if (bodyMesh && bodyMesh.material) {
+      if (!bodyMesh.material.emissive) {
+        bodyMesh.material.emissive = new THREE.Color(0x000000);
+      }
+      bodyMesh.material.emissive.setRGB(pulse * 0.45, 0, 0);
+    }
+    const eyeMesh = bossGroup.userData.eye;
+    if (eyeMesh && eyeMesh.material) {
+      eyeMesh.material.color.setHex(0xff00ff);
+    }
+  }
+
   // Boss periodically fires at player
   if (!bossGroup.userData.lastShot) bossGroup.userData.lastShot = 0;
   const now = performance.now();
-  const bossFireRate = Math.max(800, 2000 - state.stage * 100);
+  
+  // Enraged boss shoots 40% faster
+  const baseFireRate = Math.max(800, 2000 - state.stage * 100);
+  const bossFireRate = isEnraged ? baseFireRate * 0.6 : baseFireRate;
+  
   if (now - bossGroup.userData.lastShot > bossFireRate) {
     bossGroup.userData.lastShot = now;
-    spawnEnemyProjectile(bossGroup.position.clone());
-    if (state.stage >= 3) spawnEnemyProjectile(bossGroup.position.clone()); // extra shot on higher stages
+    
+    if (isEnraged) {
+      // 3-way spread pattern
+      const baseDir = new THREE.Vector3().subVectors(playerGroup.position, bossGroup.position).normalize();
+      const up = new THREE.Vector3(0, 1, 0);
+      
+      // Center
+      spawnEnemyProjectile(bossGroup.position.clone(), baseDir);
+      // Left (yaw -15 deg)
+      const leftDir = baseDir.clone().applyAxisAngle(up, -0.26);
+      spawnEnemyProjectile(bossGroup.position.clone(), leftDir);
+      // Right (yaw +15 deg)
+      const rightDir = baseDir.clone().applyAxisAngle(up, 0.26);
+      spawnEnemyProjectile(bossGroup.position.clone(), rightDir);
+    } else {
+      // Standard target shot
+      spawnEnemyProjectile(bossGroup.position.clone());
+      if (state.stage >= 3) {
+        // Extra shot on higher stages with a small delay
+        setTimeout(() => {
+          if (state.bossActive && bossGroup) {
+            spawnEnemyProjectile(bossGroup.position.clone());
+          }
+        }, 250);
+      }
+    }
   }
 
   // Check laser hits on boss
@@ -2020,45 +2311,54 @@ function drawRadar() {
   const W = radarCanvas.width;
   const H = radarCanvas.height;
   const cx = W / 2, cy = H / 2;
-  // Range matches enemy spawn distance so a dot on radar = enemy you can eventually see
   const range = 270;
+  const canvasScale = W / 160; // Scaling multiplier for drawings (originally sized for 160px)
 
   radarCtx.clearRect(0, 0, W, H);
 
   // Clip to circle
   radarCtx.save();
   radarCtx.beginPath();
-  radarCtx.arc(cx, cy, cx - 2, 0, Math.PI * 2);
+  radarCtx.arc(cx, cy, cx - 4, 0, Math.PI * 2);
   radarCtx.clip();
 
   // Background
-  radarCtx.fillStyle = 'rgba(0, 15, 8, 0.88)';
+  radarCtx.fillStyle = 'rgba(0, 12, 6, 0.9)';
   radarCtx.fillRect(0, 0, W, H);
 
-  // Grid rings
-  radarCtx.strokeStyle = 'rgba(0, 255, 100, 0.12)';
-  radarCtx.lineWidth = 1;
+  // Grid rings (concentric circles)
+  radarCtx.strokeStyle = 'rgba(0, 255, 100, 0.15)';
+  radarCtx.lineWidth = 1 * canvasScale;
   [0.33, 0.66, 1.0].forEach(r => {
     radarCtx.beginPath();
-    radarCtx.arc(cx, cy, (cx - 2) * r, 0, Math.PI * 2);
+    radarCtx.arc(cx, cy, (cx - 4) * r, 0, Math.PI * 2);
     radarCtx.stroke();
   });
 
-  // Cross-hairs (fixed, never rotate)
-  radarCtx.strokeStyle = 'rgba(0, 255, 100, 0.15)';
+  // Draw range helper labels (thin HUD text)
+  radarCtx.fillStyle = 'rgba(0, 255, 100, 0.35)';
+  radarCtx.font = `${5 * canvasScale}px 'Orbitron', monospace`;
+  radarCtx.textAlign = 'center';
+  radarCtx.fillText('90m', cx, cy - (cx - 4) * 0.33 + (2 * canvasScale));
+  radarCtx.fillText('180m', cx, cy - (cx - 4) * 0.66 + (2 * canvasScale));
+  radarCtx.fillText('270m', cx, cy - (cx - 4) * 1.0 + (6 * canvasScale));
+
+  // Cross-hairs (fixed vertical and horizontal grid lines)
+  radarCtx.strokeStyle = 'rgba(0, 255, 100, 0.18)';
+  radarCtx.lineWidth = 1 * canvasScale;
   radarCtx.beginPath();
-  radarCtx.moveTo(cx, 2); radarCtx.lineTo(cx, H - 2);
-  radarCtx.moveTo(2, cy); radarCtx.lineTo(W - 2, cy);
+  radarCtx.moveTo(cx, 4); radarCtx.lineTo(cx, H - 4);
+  radarCtx.moveTo(4, cy); radarCtx.lineTo(W - 4, cy);
   radarCtx.stroke();
 
-  // Rotating scanner sweep line (cosmetic only – does NOT rotate objects)
+  // Rotating scanner sweep line (cosmetic)
   const sweepAngle = (performance.now() / 1200) % (Math.PI * 2);
   radarCtx.save();
-  radarCtx.globalAlpha = 0.15;
-  radarCtx.fillStyle = 'rgba(0, 255, 80, 0.6)';
+  radarCtx.globalAlpha = 0.18;
+  radarCtx.fillStyle = 'rgba(0, 255, 80, 0.5)';
   radarCtx.beginPath();
   radarCtx.moveTo(cx, cy);
-  radarCtx.arc(cx, cy, cx - 2, sweepAngle - 0.6, sweepAngle);
+  radarCtx.arc(cx, cy, cx - 4, sweepAngle - 0.5, sweepAngle);
   radarCtx.closePath();
   radarCtx.fill();
   radarCtx.restore();
@@ -2066,70 +2366,111 @@ function drawRadar() {
   const px = playerGroup.position.x;
   const pz = playerGroup.position.z;
   const pYaw = playerGroup.rotation.y;
-  const scale = (cx - 6) / range;
+  const scale = (cx - 8) / range;
 
-  // World XZ → radar canvas XY  (North = -Z = up on canvas, East = +X = right)
-  // No rotation applied – radar is always North-up, only player icon rotates
-  const toRadar = (wx, wz) => ({
-    x: cx + (wx - px) * scale,
-    y: cy + (wz - pz) * scale,   // +Z = down on canvas (south)
-  });
+  // Rotation matrices setup for Heading-up mode
+  // We counter-rotate the world objects by the player's yaw
+  const cos = Math.cos(-pYaw);
+  const sin = Math.sin(-pYaw);
 
-  // Draw enemies (red dots) – only those within radar range
+  const toRadar = (wx, wz) => {
+    const dx = wx - px;
+    const dz = wz - pz;
+    // Rotate relative positions to match player's forward direction as UP (-Z)
+    const rx = dx * cos - dz * sin;
+    const rz = dx * sin + dz * cos;
+    return {
+      x: cx + rx * scale,
+      y: cy + rz * scale
+    };
+  };
+
+  // Draw enemies (red dots)
   enemies.forEach(e => {
     const dist = Math.hypot(e.mesh.position.x - px, e.mesh.position.z - pz);
     if (dist > range) return;
     const { x, y } = toRadar(e.mesh.position.x, e.mesh.position.z);
+    
     radarCtx.beginPath();
-    radarCtx.arc(x, y, 3.5, 0, Math.PI * 2);
+    radarCtx.arc(x, y, 3.5 * canvasScale, 0, Math.PI * 2);
     radarCtx.fillStyle = '#ff3333';
     radarCtx.shadowColor = '#ff0000';
-    radarCtx.shadowBlur = 5;
+    radarCtx.shadowBlur = 6 * canvasScale;
     radarCtx.fill();
-    radarCtx.shadowBlur = 0;
+    
+    // Draw small directional tail for moving enemies
+    if (e.velocity) {
+      const velDir = new THREE.Vector3().copy(e.velocity).normalize();
+      // Counter-rotate the enemy velocity direction too
+      const rx = velDir.x * cos - velDir.z * sin;
+      const rz = velDir.x * sin + velDir.z * cos;
+      radarCtx.strokeStyle = 'rgba(255, 50, 50, 0.4)';
+      radarCtx.lineWidth = 1.5 * canvasScale;
+      radarCtx.beginPath();
+      radarCtx.moveTo(x, y);
+      radarCtx.lineTo(x + rx * 8 * canvasScale, y + rz * 8 * canvasScale);
+      radarCtx.stroke();
+    }
   });
 
-  // Draw items (cyan dots)
+  // Draw items (cyan glowing dots)
   items.forEach(item => {
     const dist = Math.hypot(item.mesh.position.x - px, item.mesh.position.z - pz);
     if (dist > range) return;
     const { x, y } = toRadar(item.mesh.position.x, item.mesh.position.z);
+    
     radarCtx.beginPath();
-    radarCtx.arc(x, y, 3, 0, Math.PI * 2);
-    radarCtx.fillStyle = '#44ffcc';
+    radarCtx.arc(x, y, 3.2 * canvasScale, 0, Math.PI * 2);
+    radarCtx.fillStyle = '#00f0ff';
+    radarCtx.shadowColor = '#00f0ff';
+    radarCtx.shadowBlur = 4 * canvasScale;
     radarCtx.fill();
   });
 
-  // Draw boss (large flashing gold diamond)
+  // Draw boss (large warning diamond symbol)
   if (state.bossActive && bossGroup) {
     const { x, y } = toRadar(bossGroup.position.x, bossGroup.position.z);
-    const blink = Math.sin(performance.now() / 200) > 0;
+    const blink = Math.sin(performance.now() / 150) > 0;
+    
     radarCtx.save();
     radarCtx.translate(x, y);
     radarCtx.rotate(Math.PI / 4);
-    radarCtx.fillStyle = blink ? '#ffcc00' : '#ff8800';
-    radarCtx.shadowColor = '#ff8800';
-    radarCtx.shadowBlur = blink ? 14 : 4;
-    radarCtx.fillRect(-6, -6, 12, 12);
+    radarCtx.fillStyle = blink ? '#ff007f' : '#ffea00'; // High contrast magenta/yellow blink
+    radarCtx.shadowColor = blink ? '#ff007f' : '#ffea00';
+    radarCtx.shadowBlur = blink ? 16 * canvasScale : 6 * canvasScale;
+    
+    const dSize = 6 * canvasScale;
+    radarCtx.fillRect(-dSize, -dSize, dSize * 2, dSize * 2);
     radarCtx.restore();
   }
 
-  // Draw player at center — arrow rotates to show heading
-  // pYaw: 0 = facing -Z (up on canvas), positive = turning right
+  // Draw player at center (pointing UP, rotate=0)
   radarCtx.save();
   radarCtx.translate(cx, cy);
-  radarCtx.rotate(-pYaw);   // rotate the icon only, not the whole radar
   radarCtx.fillStyle = '#ffffff';
   radarCtx.shadowColor = '#88ffff';
-  radarCtx.shadowBlur = 7;
+  radarCtx.shadowBlur = 8 * canvasScale;
+  
   radarCtx.beginPath();
-  radarCtx.moveTo(0, -8);   // nose (forward = up on canvas at yaw=0)
-  radarCtx.lineTo(-5, 6);
-  radarCtx.lineTo(0, 3);
-  radarCtx.lineTo(5, 6);
+  radarCtx.moveTo(0, -9 * canvasScale); // nose
+  radarCtx.lineTo(-6 * canvasScale, 7 * canvasScale);
+  radarCtx.lineTo(0, 4 * canvasScale);
+  radarCtx.lineTo(6 * canvasScale, 7 * canvasScale);
   radarCtx.closePath();
   radarCtx.fill();
-  radarCtx.shadowBlur = 0;
+  
+  // Outer thruster trail indicator on player icon
+  if (state.currentSpeed > 0) {
+    const speedRatio = state.currentSpeed / GAME_CONFIG.player.speed;
+    radarCtx.fillStyle = '#ff007f';
+    radarCtx.beginPath();
+    radarCtx.moveTo(-3 * canvasScale, 6 * canvasScale);
+    radarCtx.lineTo(0, (6 + 8 * speedRatio) * canvasScale);
+    radarCtx.lineTo(3 * canvasScale, 6 * canvasScale);
+    radarCtx.closePath();
+    radarCtx.fill();
+  }
+  
   radarCtx.restore();
 
   radarCtx.restore(); // end clip
@@ -2189,6 +2530,7 @@ function animate() {
   updateEnemyProjectiles(dt); // Run enemy bullet movements & hits
   updateItems(dt);
   updateExplosions(dt);
+  updateMissiles(dt);
   updateBoss(dt);
   updateSpeedHud();
   drawRadar();
@@ -2200,6 +2542,7 @@ function animate() {
   window.gameDebug = {
     playerGroup,
     lasers,
+    missiles,
     enemies,
     state,
     keys,
@@ -2546,7 +2889,7 @@ function updateEnemies(dt) {
 // ==========================================================================
 // ENEMY PROJECTILES (PLASMA BULLETS FOR DRONES)
 // ==========================================================================
-function spawnEnemyProjectile(position) {
+function spawnEnemyProjectile(position, customDir = null) {
   const geom = new THREE.SphereGeometry(0.45, 8, 8);
   const mat = new THREE.MeshBasicMaterial({ color: 0xff0055 });
   const mesh = new THREE.Mesh(geom, mat);
@@ -2557,7 +2900,11 @@ function spawnEnemyProjectile(position) {
   scene.add(mesh);
 
   const velocity = new THREE.Vector3();
-  velocity.subVectors(playerGroup.position, position);
+  if (customDir) {
+    velocity.copy(customDir);
+  } else {
+    velocity.subVectors(playerGroup.position, position);
+  }
   
   if (state.gameMode === '2D') {
     velocity.y = 0; // Lock to flat 2D plane
