@@ -1876,7 +1876,7 @@ function startGame(mode = '3D') {
     cameraIntro.endPos.set(0, 42, -5);
     
     camera.position.copy(cameraIntro.startPos);
-    camera.lookAt(0, 0, 10); // Initialize orientation immediately (look at player z-5)
+    camera.rotation.set(-Math.PI / 2, 0, 0); // Strictly set down rotation immediately to avoid flip
     playerGroup.position.set(0, 0, 15); // Start far back to glide in
     playerGroup.scale.set(0.6, 0.6, 0.6); // Compact size in 2D
   }
@@ -3234,8 +3234,8 @@ function updateCameraIntro(dt) {
   if (state.gameMode === '3D') {
     camera.lookAt(playerGroup.position.x, playerGroup.position.y, playerGroup.position.z - 3);
   } else {
-    // 2D look down
-    camera.lookAt(playerGroup.position.x, 0, playerGroup.position.z - 5);
+    // 2D look down: Keep rotation strictly facing down (-Math.PI/2) to avoid roll flipping
+    camera.rotation.set(-Math.PI / 2, 0, 0);
   }
 
   // Stop intro when done
