@@ -1989,20 +1989,23 @@ function setupControls() {
       }
     }
 
-    // DEBUG KEY: Press 'B' during game to instantly spawn boss (or teleport boss) 140m away
+    // DEBUG KEY: Press 'B' during game to instantly spawn boss (or teleport boss) 25m/140m away
     if (e.key === 'b' || e.key === 'B') {
       if (state.mode === 'PLAYING') {
         e.preventDefault();
+        const is2D = state.gameMode === '2D';
+        const spawnDist = is2D ? 25 : 140;
+        
         if (!state.bossActive && playerGroup) {
-          console.log("DEBUG: Spawning boss instantly 140m away!");
+          console.log(`DEBUG: Spawning boss instantly ${spawnDist}m away!`);
           state.bossActive = true;
           state.bossHP = state.bossMaxHP;
           bossGroup = createBossMesh();
           const yaw = playerGroup.rotation.y;
           bossGroup.position.set(
-            playerGroup.position.x - Math.sin(yaw) * 140,
-            playerGroup.position.y + 5,
-            playerGroup.position.z - Math.cos(yaw) * 140
+            playerGroup.position.x - Math.sin(yaw) * spawnDist,
+            playerGroup.position.y + 4,
+            playerGroup.position.z - Math.cos(yaw) * spawnDist
           );
           scene.add(bossGroup);
           
@@ -2017,12 +2020,12 @@ function setupControls() {
             }, 3500);
           }
         } else if (state.bossActive && bossGroup && playerGroup) {
-          console.log("DEBUG: Teleporting boss 140m away!");
+          console.log(`DEBUG: Teleporting boss ${spawnDist}m away!`);
           const yaw = playerGroup.rotation.y;
           bossGroup.position.set(
-            playerGroup.position.x - Math.sin(yaw) * 140,
-            playerGroup.position.y + 5,
-            playerGroup.position.z - Math.cos(yaw) * 140
+            playerGroup.position.x - Math.sin(yaw) * spawnDist,
+            playerGroup.position.y + 4,
+            playerGroup.position.z - Math.cos(yaw) * spawnDist
           );
         }
       }
@@ -2200,12 +2203,14 @@ function spawnBoss() {
   state.bossHP = state.bossMaxHP;
 
   bossGroup = createBossMesh();
-  // Spawn ahead of player
+  // Spawn ahead of player (closer in 2D mode due to viewport size)
+  const is2D = state.gameMode === '2D';
+  const spawnDist = is2D ? 25 : 120;
   const yaw = playerGroup.rotation.y;
   bossGroup.position.set(
-    playerGroup.position.x - Math.sin(yaw) * 120,
-    playerGroup.position.y + 5,
-    playerGroup.position.z - Math.cos(yaw) * 120
+    playerGroup.position.x - Math.sin(yaw) * spawnDist,
+    playerGroup.position.y + 4,
+    playerGroup.position.z - Math.cos(yaw) * spawnDist
   );
   scene.add(bossGroup);
 
@@ -2237,9 +2242,13 @@ function updateBoss(dt, dispX = 0, dispZ = 0) {
   const angle = bossGroup.userData.orbitAngle;
   const yaw = playerGroup.rotation.y;
   
-  // Base offset is 80m ahead of player's heading, with a 30m orbit sweep
-  const targetX = playerGroup.position.x - Math.sin(yaw) * 80 + Math.cos(angle) * 30;
-  const targetZ = playerGroup.position.z - Math.cos(yaw) * 80 + Math.sin(angle) * 30;
+  const is2D = state.gameMode === '2D';
+  const orbitDist = is2D ? 18 : 80;
+  const orbitR = is2D ? 6 : 30;
+  
+  // Base offset is ahead of player's heading, with an orbit sweep
+  const targetX = playerGroup.position.x - Math.sin(yaw) * orbitDist + Math.cos(angle) * orbitR;
+  const targetZ = playerGroup.position.z - Math.cos(yaw) * orbitDist + Math.sin(angle) * orbitR;
   
   bossGroup.userData.verticalBob += dt;
   const targetY = playerGroup.position.y + 4 + Math.sin(bossGroup.userData.verticalBob * 0.8) * 5;
