@@ -2463,20 +2463,14 @@ function drawRadar() {
   const pYaw = playerGroup.rotation.y;
   const scale = (cx - 8) / range;
 
-  // Rotation matrices setup for Heading-up mode
-  // We counter-rotate the world objects by the player's yaw
-  const cos = Math.cos(pYaw);
-  const sin = Math.sin(pYaw);
-
+  // North-up: Game world directions map directly to radar.
+  // -Z (forward/north) is UP, +X (right/east) is RIGHT.
   const toRadar = (wx, wz) => {
     const dx = wx - px;
     const dz = wz - pz;
-    // Rotate relative positions to match player's forward direction as UP (-Z)
-    const rx = dx * cos - dz * sin;
-    const rz = dx * sin + dz * cos;
     return {
-      x: cx + rx * scale,
-      y: cy + rz * scale
+      x: cx + dx * scale,
+      y: cy + dz * scale
     };
   };
 
@@ -2506,14 +2500,11 @@ function drawRadar() {
     // Draw small directional tail for moving hostile ships (not asteroids)
     if (!isAsteroid && e.velocity) {
       const velDir = new THREE.Vector3().copy(e.velocity).normalize();
-      // Counter-rotate the enemy velocity direction too
-      const rx = velDir.x * cos - velDir.z * sin;
-      const rz = velDir.x * sin + velDir.z * cos;
       radarCtx.strokeStyle = 'rgba(255, 50, 50, 0.4)';
       radarCtx.lineWidth = 1 * canvasScale;
       radarCtx.beginPath();
       radarCtx.moveTo(x, y);
-      radarCtx.lineTo(x + rx * 4 * canvasScale, y + rz * 4 * canvasScale);
+      radarCtx.lineTo(x + velDir.x * 4 * canvasScale, y + velDir.z * 4 * canvasScale);
       radarCtx.stroke();
     }
   });
@@ -2552,9 +2543,10 @@ function drawRadar() {
     }
   }
 
-  // Draw player at center (pointing UP, rotate=0)
+  // Draw player at center (pointing to player's actual yaw heading)
   radarCtx.save();
   radarCtx.translate(cx, cy);
+  radarCtx.rotate(-pYaw);
   radarCtx.fillStyle = '#ffffff';
   radarCtx.shadowColor = '#88ffff';
   radarCtx.shadowBlur = 5 * canvasScale;
@@ -2591,12 +2583,10 @@ function drawRadar() {
     if (dist > range) {
       const blink = Math.sin(performance.now() / 150) > 0;
       
-      // Calculate angle in counter-rotated space
+      // North-up angle calculation
       const dx = bossGroup.position.x - px;
       const dz = bossGroup.position.z - pz;
-      const rx = dx * cos - dz * sin;
-      const rz = dx * sin + dz * cos;
-      const angle = Math.atan2(rz, rx);
+      const angle = Math.atan2(dz, dx);
       
       // Position right on the circular radar border
       const x = cx + Math.cos(angle) * (cx - 4);
