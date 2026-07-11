@@ -2370,8 +2370,8 @@ function drawRadar() {
 
   // Rotation matrices setup for Heading-up mode
   // We counter-rotate the world objects by the player's yaw
-  const cos = Math.cos(-pYaw);
-  const sin = Math.sin(-pYaw);
+  const cos = Math.cos(pYaw);
+  const sin = Math.sin(pYaw);
 
   const toRadar = (wx, wz) => {
     const dx = wx - px;
