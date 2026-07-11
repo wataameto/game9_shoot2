@@ -52,6 +52,8 @@ let state = {
   bossMaxHP: 30,
   invincible: false,
   invincibleTime: 0,
+  timeElapsed: 0,
+  bossSpawnTimeLimit: 45,
 };
 
 // Controls tracking
@@ -1817,6 +1819,7 @@ function startGame(mode = '3D') {
   state.weaponLevel = 1;
   state.invincible = false;
   state.invincibleTime = 0;
+  state.timeElapsed = 0;
   state.difficultyMultiplier = Math.max(1.0, 1.0 + (state.stage - 1) * 0.3);
 
   // Reset boss state
@@ -2732,6 +2735,15 @@ function animate() {
       }
       
       spawnEnemy();
+
+      // Auto-spawn boss after time limit even if player hasn't killed enough enemies
+      if (!state.bossActive) {
+        state.timeElapsed += dt;
+        if (state.timeElapsed >= state.bossSpawnTimeLimit) {
+          console.log(`Time limit reached (${state.bossSpawnTimeLimit}s). Spawning boss automatically.`);
+          spawnBoss();
+        }
+      }
     }
   }
 
