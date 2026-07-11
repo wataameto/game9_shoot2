@@ -50,12 +50,33 @@
       <!-- Sight / Crosshair in the center of the screen -->
       <div class="hud-center-sight" aria-hidden="true"></div>
 
-      <!-- Bottom HUD Panel: Control Hints -->
+      <!-- Bottom HUD Panel: Control Hints & Speedometer -->
       <footer class="hud-bottom">
+        <div class="hud-speed-panel">
+          <span class="hud-label">THRUST SPEED</span>
+          <div class="speed-container">
+            <div id="hud-speed-bar" class="speed-bar" style="width: 0%;"></div>
+          </div>
+          <span id="hud-speed-text" class="speed-value">0 KM/H</span>
+        </div>
         <div class="control-hint">
           [W,A,S,D / 矢印キー]: 移動 | [SPACE / マウスクリック]: レーザー発射
         </div>
       </footer>
+
+      <!-- Boss HP Bar (hidden until boss spawns) -->
+      <div id="boss-meter" style="display:none;">
+        <div class="boss-label">⚠ BOSS ⚠</div>
+        <div class="boss-bar-container">
+          <div id="boss-bar" class="boss-bar-fill" style="width:100%;"></div>
+        </div>
+      </div>
+
+      <!-- Radar (bottom-right corner) -->
+      <div id="hud-radar">
+        <canvas id="radar-canvas" width="160" height="160"></canvas>
+        <div class="radar-label">RADAR</div>
+      </div>
     </div>
   </div>
 
@@ -110,9 +131,25 @@
       </div>
 
       <div class="mode-select-container">
-        <button id="btn-restart-3d" class="btn-cyber" type="button">REDEPLOY 3D</button>
-        <button id="btn-restart-2d" class="btn-cyber btn-2d" type="button">REDEPLOY 2D</button>
-        <button id="btn-gameover-title" class="btn-cyber btn-secondary" type="button">RETURN TO TITLE</button>
+        <button id="btn-restart-3d" class="btn-cyber" type="button">再出撃 (3Dモード)</button>
+        <button id="btn-restart-2d" class="btn-cyber btn-2d" type="button">再出撃 (2Dモード)</button>
+        <button id="btn-gameover-title" class="btn-cyber btn-secondary" type="button">タイトルに戻る</button>
+      </div>
+      <p style="font-size: 0.82rem; color: #4a5568; margin-top: 12px; font-weight: 500; opacity: 0.8; text-align: center;">
+        ※ キーボードの [ENTERキー] でも即座に再出撃できます
+      </p>
+    </div>
+  </section>
+
+  <!-- Stage Clear Overlay -->
+  <section id="stageclear-screen" class="screen-overlay" aria-labelledby="stageclear-title">
+    <div class="menu-panel stageclear-panel">
+      <h2 id="stageclear-title" class="title-cyber stageclear-title">STAGE CLEAR!</h2>
+      <p class="subtitle-cyber" id="stageclear-stage">STAGE 1 COMPLETE</p>
+      <div class="stageclear-stars">★★★</div>
+      <div class="mode-select-container">
+        <button id="btn-next-stage" class="btn-cyber" type="button">NEXT STAGE →</button>
+        <button id="btn-stageclear-title" class="btn-cyber btn-secondary" type="button">タイトルに戻る</button>
       </div>
     </div>
   </section>
