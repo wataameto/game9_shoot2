@@ -2449,68 +2449,15 @@ function drawRadar() {
     radarCtx.fill();
   });
 
-  // Draw boss (large diamond in range, flashing caution arrow on border when out of range)
+  // Draw boss (large diamond in range)
   if (state.bossActive && bossGroup) {
     const dist = Math.hypot(bossGroup.position.x - px, bossGroup.position.z - pz);
-    const blink = Math.sin(performance.now() / 150) > 0;
-    
-    let x, y;
-    let isOnBorder = false;
-    
-    if (dist > range) {
-      isOnBorder = true;
-      // Calculate angle in counter-rotated space
-      const dx = bossGroup.position.x - px;
-      const dz = bossGroup.position.z - pz;
-      const rx = dx * cos - dz * sin;
-      const rz = dx * sin + dz * cos;
-      const angle = Math.atan2(rz, rx);
-      
-      // Position right on the circular radar border
-      x = cx + Math.cos(angle) * (cx - 6);
-      y = cy + Math.sin(angle) * (cx - 6);
-    } else {
+    if (dist <= range) {
       const pos = toRadar(bossGroup.position.x, bossGroup.position.z);
-      x = pos.x;
-      y = pos.y;
-    }
-    
-    radarCtx.save();
-    if (isOnBorder) {
-      // Draw a pulsing caution triangle pointing toward the boss on the border
-      const angle = Math.atan2(y - cy, x - cx);
-      radarCtx.translate(x, y);
-      radarCtx.rotate(angle + Math.PI / 2); // Rotate to point inward
+      const blink = Math.sin(performance.now() / 150) > 0;
       
-      radarCtx.fillStyle = blink ? '#ff0033' : '#ffcc00';
-      radarCtx.shadowColor = '#ff0000';
-      radarCtx.shadowBlur = 10 * canvasScale;
-      
-      radarCtx.beginPath();
-      // Triangle pointing inward (towards player)
-      radarCtx.moveTo(0, -6 * canvasScale);
-      radarCtx.lineTo(-5 * canvasScale, 4 * canvasScale);
-      radarCtx.lineTo(5 * canvasScale, 4 * canvasScale);
-      radarCtx.closePath();
-      radarCtx.fill();
-      
-      // Distance text near the border arrow
-      radarCtx.shadowBlur = 0;
-      radarCtx.fillStyle = '#ffcc00';
-      radarCtx.font = `bold ${6 * canvasScale}px 'Orbitron', monospace`;
-      radarCtx.textAlign = 'center';
-      
-      // Rotate back text so numbers remain upright and readable
-      radarCtx.rotate(-(angle + Math.PI / 2));
-      const textDist = Math.round(dist) + 'm';
-      
-      // Position text slightly offset from border arrow towards player
-      const tx = -Math.cos(angle) * 15 * canvasScale;
-      const ty = -Math.sin(angle) * 15 * canvasScale;
-      radarCtx.fillText(textDist, tx, ty + (2 * canvasScale));
-    } else {
-      // Draw standard inner radar diamond symbol
-      radarCtx.translate(x, y);
+      radarCtx.save();
+      radarCtx.translate(pos.x, pos.y);
       radarCtx.rotate(Math.PI / 4);
       radarCtx.fillStyle = blink ? '#ff007f' : '#ffea00';
       radarCtx.shadowColor = blink ? '#ff007f' : '#ffea00';
@@ -2518,8 +2465,8 @@ function drawRadar() {
       
       const dSize = 6 * canvasScale;
       radarCtx.fillRect(-dSize, -dSize, dSize * 2, dSize * 2);
+      radarCtx.restore();
     }
-    radarCtx.restore();
   }
 
   // Draw player at center (pointing UP, rotate=0)
@@ -2552,6 +2499,61 @@ function drawRadar() {
   radarCtx.restore();
 
   radarCtx.restore(); // end clip
+
+  // =========================================================
+  // OUT OF RANGE BOSS INDICATOR (Drawn OUTSIDE the circular clip)
+  // =========================================================
+  if (state.bossActive && bossGroup) {
+    const dist = Math.hypot(bossGroup.position.x - px, bossGroup.position.z - pz);
+    if (dist > range) {
+      const blink = Math.sin(performance.now() / 150) > 0;
+      
+      // Calculate angle in counter-rotated space
+      const dx = bossGroup.position.x - px;
+      const dz = bossGroup.position.z - pz;
+      const rx = dx * cos - dz * sin;
+      const rz = dx * sin + dz * cos;
+      const angle = Math.atan2(rz, rx);
+      
+      // Position right on the circular radar border
+      const x = cx + Math.cos(angle) * (cx - 4);
+      const y = cy + Math.sin(angle) * (cx - 4);
+      
+      radarCtx.save();
+      // Draw a pulsing caution triangle pointing toward the boss on the border
+      const borderAngle = Math.atan2(y - cy, x - cx);
+      radarCtx.translate(x, y);
+      radarCtx.rotate(borderAngle + Math.PI / 2); // Rotate to point inward
+      
+      radarCtx.fillStyle = blink ? '#ff0033' : '#ffcc00';
+      radarCtx.shadowColor = '#ff0000';
+      radarCtx.shadowBlur = 10 * canvasScale;
+      
+      radarCtx.beginPath();
+      // Triangle pointing inward (towards player)
+      radarCtx.moveTo(0, -6 * canvasScale);
+      radarCtx.lineTo(-5 * canvasScale, 4 * canvasScale);
+      radarCtx.lineTo(5 * canvasScale, 4 * canvasScale);
+      radarCtx.closePath();
+      radarCtx.fill();
+      
+      // Distance text near the border arrow
+      radarCtx.shadowBlur = 0;
+      radarCtx.fillStyle = '#ffcc00';
+      radarCtx.font = `bold ${6 * canvasScale}px 'Orbitron', monospace`;
+      radarCtx.textAlign = 'center';
+      
+      // Rotate back text so numbers remain upright and readable
+      radarCtx.rotate(-(borderAngle + Math.PI / 2));
+      const textDist = Math.round(dist) + 'm';
+      
+      // Position text slightly offset from border arrow towards player
+      const tx = -Math.cos(borderAngle) * 16 * canvasScale;
+      const ty = -Math.sin(borderAngle) * 16 * canvasScale;
+      radarCtx.fillText(textDist, tx, ty + (2 * canvasScale));
+      radarCtx.restore();
+    }
+  }
 }
 
 function updateBossLockon() {
