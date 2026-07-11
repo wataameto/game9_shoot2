@@ -874,13 +874,27 @@ function updateCamera(dt) {
     camera.position.y = THREE.MathUtils.lerp(camera.position.y, targetCamY, 4.8 * dt);
     camera.position.z = THREE.MathUtils.lerp(camera.position.z, targetCamZ, 4.8 * dt);
     
-    // Look ahead of player
-    const lookAheadDistance = 20;
-    const lookTarget = new THREE.Vector3(
-      playerPos.x - Math.sin(yaw) * lookAheadDistance,
-      playerPos.y + 0.5,
-      playerPos.z - Math.cos(yaw) * lookAheadDistance
-    );
+    // Look ahead of player (or focus on boss if active)
+    let lookTarget;
+    if (state.bossActive && bossGroup) {
+      // Dynamic camera tracking: blend ahead looking vector with boss location
+      const aheadX = playerPos.x - Math.sin(yaw) * 15;
+      const aheadY = playerPos.y + 0.5;
+      const aheadZ = playerPos.z - Math.cos(yaw) * 15;
+      
+      lookTarget = new THREE.Vector3(
+        aheadX * 0.35 + bossGroup.position.x * 0.65,
+        aheadY * 0.35 + (bossGroup.position.y - 2) * 0.65, // slightly lower to keep boss centered
+        aheadZ * 0.35 + bossGroup.position.z * 0.65
+      );
+    } else {
+      const lookAheadDistance = 20;
+      lookTarget = new THREE.Vector3(
+        playerPos.x - Math.sin(yaw) * lookAheadDistance,
+        playerPos.y + 0.5,
+        playerPos.z - Math.cos(yaw) * lookAheadDistance
+      );
+    }
     
     const tempMatrix = new THREE.Matrix4();
     tempMatrix.lookAt(camera.position, lookTarget, new THREE.Vector3(0, 1, 0));
@@ -1975,20 +1989,20 @@ function setupControls() {
       }
     }
 
-    // DEBUG KEY: Press 'B' during game to instantly spawn boss (or teleport boss) 350m away
+    // DEBUG KEY: Press 'B' during game to instantly spawn boss (or teleport boss) 140m away
     if (e.key === 'b' || e.key === 'B') {
       if (state.mode === 'PLAYING') {
         e.preventDefault();
         if (!state.bossActive && playerGroup) {
-          console.log("DEBUG: Spawning boss instantly 350m away!");
+          console.log("DEBUG: Spawning boss instantly 140m away!");
           state.bossActive = true;
           state.bossHP = state.bossMaxHP;
           bossGroup = createBossMesh();
           const yaw = playerGroup.rotation.y;
           bossGroup.position.set(
-            playerGroup.position.x - Math.sin(yaw) * 350,
+            playerGroup.position.x - Math.sin(yaw) * 140,
             playerGroup.position.y + 5,
-            playerGroup.position.z - Math.cos(yaw) * 350
+            playerGroup.position.z - Math.cos(yaw) * 140
           );
           scene.add(bossGroup);
           
@@ -2003,12 +2017,12 @@ function setupControls() {
             }, 3500);
           }
         } else if (state.bossActive && bossGroup && playerGroup) {
-          console.log("DEBUG: Teleporting boss 350m away!");
+          console.log("DEBUG: Teleporting boss 140m away!");
           const yaw = playerGroup.rotation.y;
           bossGroup.position.set(
-            playerGroup.position.x - Math.sin(yaw) * 350,
+            playerGroup.position.x - Math.sin(yaw) * 140,
             playerGroup.position.y + 5,
-            playerGroup.position.z - Math.cos(yaw) * 350
+            playerGroup.position.z - Math.cos(yaw) * 140
           );
         }
       }
@@ -2227,9 +2241,13 @@ function updateBoss(dt) {
   bossGroup.userData.verticalBob += dt;
   const targetY = playerGroup.position.y + 5 + Math.sin(bossGroup.userData.verticalBob * 0.8) * 8;
 
-  bossGroup.position.x = THREE.MathUtils.lerp(bossGroup.position.x, targetX, 1.5 * dt);
-  bossGroup.position.z = THREE.MathUtils.lerp(bossGroup.position.z, targetZ, 1.5 * dt);
-  bossGroup.position.y = THREE.MathUtils.lerp(bossGroup.position.y, targetY, 1.5 * dt);
+  // Carry over player's speed to prevent boss from getting left behind in deep space
+  bossGroup.position.x += state.velocity.x * dt;
+  bossGroup.position.z += state.velocity.z * dt;
+
+  bossGroup.position.x = THREE.MathUtils.lerp(bossGroup.position.x, targetX, 3.5 * dt);
+  bossGroup.position.z = THREE.MathUtils.lerp(bossGroup.position.z, targetZ, 3.5 * dt);
+  bossGroup.position.y = THREE.MathUtils.lerp(bossGroup.position.y, targetY, 3.5 * dt);
 
   // Always face the player
   bossGroup.lookAt(playerGroup.position);
