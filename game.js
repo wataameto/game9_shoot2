@@ -1864,6 +1864,7 @@ function startGame(mode = '3D') {
     cameraIntro.endPos.set(0, 0, 15);
     
     camera.position.copy(cameraIntro.startPos);
+    camera.lookAt(0, 0, 12); // Initialize orientation immediately (look at player z-3)
     playerGroup.position.set(0, 0, 15); // Start far back to glide in
     playerGroup.scale.set(1.0, 1.0, 1.0); // Full size in 3D
   } else {
@@ -1875,6 +1876,7 @@ function startGame(mode = '3D') {
     cameraIntro.endPos.set(0, 42, -5);
     
     camera.position.copy(cameraIntro.startPos);
+    camera.lookAt(0, 0, 10); // Initialize orientation immediately (look at player z-5)
     playerGroup.position.set(0, 0, 15); // Start far back to glide in
     playerGroup.scale.set(0.6, 0.6, 0.6); // Compact size in 2D
   }
