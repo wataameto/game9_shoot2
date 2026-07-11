@@ -2449,21 +2449,31 @@ function drawRadar() {
     };
   };
 
-  // Draw enemies (red dots)
+  // Draw enemies (red dots for ships, gray/white for asteroids)
   enemies.forEach(e => {
     const dist = Math.hypot(e.mesh.position.x - px, e.mesh.position.z - pz);
     if (dist > range) return;
     const { x, y } = toRadar(e.mesh.position.x, e.mesh.position.z);
+    const isAsteroid = e.type === 'ASTEROID';
     
     radarCtx.beginPath();
     radarCtx.arc(x, y, 1.5 * canvasScale, 0, Math.PI * 2);
-    radarCtx.fillStyle = '#ff3333';
-    radarCtx.shadowColor = '#ff0000';
-    radarCtx.shadowBlur = 3 * canvasScale;
+    
+    if (isAsteroid) {
+      // Dull light gray for space rocks (asteroids)
+      radarCtx.fillStyle = '#b0b5bc';
+      radarCtx.shadowColor = '#666666';
+      radarCtx.shadowBlur = 1 * canvasScale;
+    } else {
+      // Neon red for active hostile drone ships
+      radarCtx.fillStyle = '#ff3333';
+      radarCtx.shadowColor = '#ff0000';
+      radarCtx.shadowBlur = 3 * canvasScale;
+    }
     radarCtx.fill();
     
-    // Draw small directional tail for moving enemies
-    if (e.velocity) {
+    // Draw small directional tail for moving hostile ships (not asteroids)
+    if (!isAsteroid && e.velocity) {
       const velDir = new THREE.Vector3().copy(e.velocity).normalize();
       // Counter-rotate the enemy velocity direction too
       const rx = velDir.x * cos - velDir.z * sin;
