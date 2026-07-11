@@ -309,7 +309,8 @@ function createPlayerShip() {
   const wingMetalMat = new THREE.MeshStandardMaterial({
     color: 0xffb7d5,       // Sweet pastel cherry blossom pink (high contrast against blue sky)
     metalness: 0.15,
-    roughness: 0.25
+    roughness: 0.25,
+    side: THREE.DoubleSide
   });
 
   const canopyGlassMat = new THREE.MeshStandardMaterial({
@@ -1312,6 +1313,19 @@ function fireLaser() {
     const velocity = new THREE.Vector3(0, 0, -GAME_CONFIG.laser.speed);
     velocity.applyAxisAngle(upAxis, shipYaw);
 
+    // 3D Mode Aim Correction: direct laser vertically/diagonally towards active boss
+    if (state.gameMode === '3D' && state.bossActive && bossGroup) {
+      const dy = bossGroup.position.y - laserMesh.position.y;
+      const dx = bossGroup.position.x - laserMesh.position.x;
+      const dz = bossGroup.position.z - laserMesh.position.z;
+      const horizDist = Math.hypot(dx, dz);
+      if (horizDist > 0.1) {
+        const speedXZ = Math.hypot(velocity.x, velocity.z);
+        velocity.y = (dy * speedXZ) / horizDist;
+        laserMesh.lookAt(bossGroup.position);
+      }
+    }
+
     lasers.push({
       mesh: laserMesh,
       velocity: velocity
@@ -1347,6 +1361,29 @@ function fireLaser() {
     
     const rightVelocity = new THREE.Vector3(spreadX, 0, -GAME_CONFIG.laser.speed);
     rightVelocity.applyAxisAngle(upAxis, shipYaw);
+
+    // 3D Mode Aim Correction for Cannons
+    if (state.gameMode === '3D' && state.bossActive && bossGroup) {
+      const dy = bossGroup.position.y - leftLaser.position.y;
+      const dx = bossGroup.position.x - leftLaser.position.x;
+      const dz = bossGroup.position.z - leftLaser.position.z;
+      const horizDist = Math.hypot(dx, dz);
+      if (horizDist > 0.1) {
+        const speedXZ = Math.hypot(leftVelocity.x, leftVelocity.z);
+        leftVelocity.y = (dy * speedXZ) / horizDist;
+        leftLaser.lookAt(bossGroup.position);
+      }
+      
+      const rdy = bossGroup.position.y - rightLaser.position.y;
+      const rdx = bossGroup.position.x - rightLaser.position.x;
+      const rdz = bossGroup.position.z - rightLaser.position.z;
+      const rhorizDist = Math.hypot(rdx, rdz);
+      if (rhorizDist > 0.1) {
+        const rspeedXZ = Math.hypot(rightVelocity.x, rightVelocity.z);
+        rightVelocity.y = (rdy * rspeedXZ) / rhorizDist;
+        rightLaser.lookAt(bossGroup.position);
+      }
+    }
 
     lasers.push({
       mesh: leftLaser,
@@ -2101,14 +2138,25 @@ function setupControls() {
       action();
     };
 
+    // pointerdown handles desktop mouse down immediately, preventing issues where click events get canceled by dragging/moving the mouse slightly
+    btnElement.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return; // Only allow left-clicks
+      e.preventDefault();
+      e.stopPropagation(); // Stop event from propagating to game canvas drag controllers
+      fire();
+    });
+
     // touchstart fires immediately on mobile (prevents 300ms click delay)
     btnElement.addEventListener('touchstart', (e) => {
       e.preventDefault(); // prevent synthesized mouse click from also firing
       fire();
     }, { passive: false });
 
-    // click handles desktop mouse and keyboard activation (Tab+Enter)
-    btnElement.addEventListener('click', fire);
+    // click handles fallback desktop mouse and keyboard activation (Tab+Enter)
+    btnElement.addEventListener('click', (e) => {
+      e.preventDefault();
+      fire();
+    });
   };
 
   // Keyboard shortcut: Enter key restarts/launches from gameover or title screen
