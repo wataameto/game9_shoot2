@@ -46,7 +46,7 @@ let state = {
   currentSpeed: 0,
   velocity: new THREE.Vector3(),
   stage: 1,
-  killsForBoss: 15,   // kills needed to trigger boss
+  killsForBoss: 8,   // kills needed to trigger boss
   bossActive: false,
   bossHP: 0,
   bossMaxHP: 30,
@@ -1970,6 +1970,45 @@ function setupControls() {
         startGame(state.gameMode || '3D');
       }
     }
+
+    // DEBUG KEY: Press 'B' during game to instantly spawn boss (or teleport boss) 350m away
+    if (e.key === 'b' || e.key === 'B') {
+      if (state.mode === 'PLAYING') {
+        e.preventDefault();
+        if (!state.bossActive && playerGroup) {
+          console.log("DEBUG: Spawning boss instantly 350m away!");
+          state.bossActive = true;
+          state.bossHP = state.bossMaxHP;
+          bossGroup = createBossMesh();
+          const yaw = playerGroup.rotation.y;
+          bossGroup.position.set(
+            playerGroup.position.x - Math.sin(yaw) * 350,
+            playerGroup.position.y + 5,
+            playerGroup.position.z - Math.cos(yaw) * 350
+          );
+          scene.add(bossGroup);
+          
+          const bm = dom.bossMeter;
+          if (bm) bm.style.display = 'flex';
+          
+          const bao = dom.bossAlertOverlay;
+          if (bao) {
+            bao.style.display = 'flex';
+            setTimeout(() => {
+              bao.style.display = 'none';
+            }, 3500);
+          }
+        } else if (state.bossActive && bossGroup && playerGroup) {
+          console.log("DEBUG: Teleporting boss 350m away!");
+          const yaw = playerGroup.rotation.y;
+          bossGroup.position.set(
+            playerGroup.position.x - Math.sin(yaw) * 350,
+            playerGroup.position.y + 5,
+            playerGroup.position.z - Math.cos(yaw) * 350
+          );
+        }
+      }
+    }
   });
 
   window.addEventListener('keyup', (e) => {
@@ -2308,7 +2347,7 @@ function stageClear() {
 
 function nextStage() {
   state.stage++;
-  state.killsForBoss = 15 + (state.stage - 1) * 5;  // more kills needed each stage
+  state.killsForBoss = 8 + (state.stage - 1) * 4;  // more kills needed each stage
   state.bossMaxHP = 30 + (state.stage - 1) * 10;      // boss gets harder
   state.difficultyMultiplier = 1.0 + (state.stage - 1) * 0.3;
 
