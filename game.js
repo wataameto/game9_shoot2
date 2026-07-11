@@ -1194,8 +1194,9 @@ function spawnEnemy() {
       const spawnZ = pPos.z + forwardZ * (distOffset + offsetZ) + rightZ * (baseSideOffset + offsetX);
       const spawnY = state.gameMode === '3D' ? (Math.random() - 0.5) * 5 : 0;
 
+      const droneScale = scale * 1.8;
       droneMesh.position.set(spawnX, spawnY, spawnZ);
-      droneMesh.scale.set(scale, scale, scale);
+      droneMesh.scale.set(droneScale, droneScale, droneScale);
       scene.add(droneMesh);
 
       // Cache original materials for hit flash
@@ -1215,7 +1216,7 @@ function spawnEnemy() {
       enemies.push({
         mesh: droneMesh,
         type: 'DRONE',
-        radius: 1.1 * scale,
+        radius: 1.1 * droneScale,
         speed: speed,
         velocity: velocity,
         hp: 2, // 2 HP so player sees hit flash
