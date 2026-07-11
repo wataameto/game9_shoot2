@@ -748,3 +748,184 @@ body, html {
   from { transform: scale(1.0); opacity: 0.85; }
   to   { transform: scale(1.08); opacity: 1.0; }
 }
+
+/* =========================================================
+   BOSS LOCK-ON HUD & WARNING ALERTS
+   ========================================================= */
+.boss-alert-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(255, 0, 85, 0.15);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 10;
+  pointer-events: none;
+  animation: siren-pulse 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes siren-pulse {
+  from { background: rgba(255, 0, 85, 0.05); }
+  to   { background: rgba(255, 0, 85, 0.22); }
+}
+
+.boss-alert-box {
+  text-align: center;
+  padding: 30px 60px;
+  background: rgba(0, 0, 0, 0.85);
+  border-top: 4px solid #ff0055;
+  border-bottom: 4px solid #ff0055;
+  box-shadow: 0 0 35px rgba(255, 0, 85, 0.6), inset 0 0 20px rgba(255, 0, 85, 0.4);
+  transform: skewX(-6deg);
+  animation: alert-slide 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes alert-slide {
+  from { transform: skewX(-6deg) scaleY(0); opacity: 0; }
+  to   { transform: skewX(-6deg) scaleY(1); opacity: 1; }
+}
+
+.boss-alert-warn {
+  font-family: 'Orbitron', monospace;
+  font-size: 1.1rem;
+  color: #ff0055;
+  font-weight: 900;
+  letter-spacing: 6px;
+  text-shadow: 0 0 10px #ff0055;
+  animation: text-blink 0.4s ease-in-out infinite alternate;
+}
+
+@keyframes text-blink {
+  from { opacity: 0.5; }
+  to   { opacity: 1.0; }
+}
+
+.boss-alert-title {
+  font-family: 'Orbitron', monospace;
+  font-size: 2.2rem;
+  color: #fff;
+  font-weight: 900;
+  letter-spacing: 4px;
+  margin: 12px 0;
+  text-shadow: 0 0 15px rgba(255, 255, 255, 0.8), 0 0 5px #ff0055;
+}
+
+.boss-alert-sub {
+  font-family: 'Orbitron', monospace;
+  font-size: 0.8rem;
+  color: #ffea00;
+  letter-spacing: 3px;
+  text-shadow: 0 0 6px #ffea00;
+}
+
+/* 3D Target Lock-on Marker */
+#boss-lockon {
+  position: absolute;
+  width: 90px;
+  height: 90px;
+  transform: translate(-50%, -50%);
+  z-index: 5;
+  pointer-events: none;
+}
+
+/* Inside screen reticle box */
+.lockon-box {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border: 1px dashed rgba(255, 0, 127, 0.4);
+  animation: lockon-spin 8s linear infinite;
+}
+
+@keyframes lockon-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.lockon-box .corner {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border: 3px solid #ff007f;
+  box-shadow: 0 0 12px #ff007f;
+}
+
+.lockon-box .top-left     { top: 0; left: 0; border-right: none; border-bottom: none; }
+.lockon-box .top-right    { top: 0; right: 0; border-left: none; border-bottom: none; }
+.lockon-box .bottom-left  { bottom: 0; left: 0; border-right: none; border-top: none; }
+.lockon-box .bottom-right { bottom: 0; right: 0; border-left: none; border-top: none; }
+
+.lockon-boss-label {
+  position: absolute;
+  top: -24px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: 'Orbitron', monospace;
+  font-size: 0.58rem;
+  font-weight: 900;
+  color: #ff007f;
+  letter-spacing: 2px;
+  text-shadow: 0 0 6px #ff007f;
+  white-space: nowrap;
+}
+
+.lockon-boss-dist {
+  position: absolute;
+  bottom: -24px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: 'Orbitron', monospace;
+  font-size: 0.72rem;
+  font-weight: bold;
+  color: #ffea00;
+  letter-spacing: 1px;
+  text-shadow: 0 0 8px #ffea00;
+  white-space: nowrap;
+}
+
+/* Off-screen edge pointer indicator */
+#boss-lockon.screen-edge {
+  width: 48px;
+  height: 48px;
+}
+
+#boss-lockon.screen-edge .lockon-arrow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-bottom: 14px solid #ff0055;
+  filter: drop-shadow(0 0 8px #ff0000);
+  transform-origin: 50% 50%;
+  margin-top: -15px; /* Adjust center pivot */
+  margin-left: -8px;
+  animation: arrow-bounce 0.6s ease-in-out infinite alternate;
+}
+
+@keyframes arrow-bounce {
+  from { transform: translateY(0px) scale(0.9); }
+  to   { transform: translateY(-5px) scale(1.15); }
+}
+
+#boss-lockon.screen-edge .lockon-label {
+  position: absolute;
+  top: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: 'Orbitron', monospace;
+  font-size: 0.62rem;
+  font-weight: bold;
+  color: #ffcc00;
+  text-shadow: 0 0 6px #ff0000;
+  background: rgba(0, 0, 0, 0.75);
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 0, 85, 0.4);
+  white-space: nowrap;
+}

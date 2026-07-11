@@ -133,6 +133,8 @@ const dom = {
   get btnNextStage() { return document.getElementById('btn-next-stage'); },
   get bossMeter() { return document.getElementById('boss-meter'); },
   get bossBar() { return document.getElementById('boss-bar'); },
+  get bossLockon() { return document.getElementById('boss-lockon'); },
+  get bossAlertOverlay() { return document.getElementById('boss-alert-overlay'); },
 };
 
 // ==========================================================================
@@ -1784,6 +1786,12 @@ function cleanupGameplay() {
     bossGroup = null;
   }
   state.bossActive = false;
+
+  // Hide boss Lock-on HUD and alert overlays
+  const bl = dom.bossLockon;
+  if (bl) bl.style.display = 'none';
+  const bao = dom.bossAlertOverlay;
+  if (bao) bao.style.display = 'none';
 }
 
 function startGame(mode = '3D') {
@@ -2148,8 +2156,16 @@ function spawnBoss() {
   const bm = dom.bossMeter;
   if (bm) bm.style.display = 'flex';
 
-  // Dramatic flash
+  // Dramatic flash and siren warning overlay
   triggerScreenFlash('rgba(255, 0, 0, 0.25)', 600);
+
+  const bao = dom.bossAlertOverlay;
+  if (bao) {
+    bao.style.display = 'flex';
+    setTimeout(() => {
+      bao.style.display = 'none';
+    }, 3500);
+  }
 }
 
 function updateBoss(dt) {
@@ -2398,10 +2414,10 @@ function drawRadar() {
     const { x, y } = toRadar(e.mesh.position.x, e.mesh.position.z);
     
     radarCtx.beginPath();
-    radarCtx.arc(x, y, 3.5 * canvasScale, 0, Math.PI * 2);
+    radarCtx.arc(x, y, 1.5 * canvasScale, 0, Math.PI * 2);
     radarCtx.fillStyle = '#ff3333';
     radarCtx.shadowColor = '#ff0000';
-    radarCtx.shadowBlur = 6 * canvasScale;
+    radarCtx.shadowBlur = 3 * canvasScale;
     radarCtx.fill();
     
     // Draw small directional tail for moving enemies
@@ -2411,10 +2427,10 @@ function drawRadar() {
       const rx = velDir.x * cos - velDir.z * sin;
       const rz = velDir.x * sin + velDir.z * cos;
       radarCtx.strokeStyle = 'rgba(255, 50, 50, 0.4)';
-      radarCtx.lineWidth = 1.5 * canvasScale;
+      radarCtx.lineWidth = 1 * canvasScale;
       radarCtx.beginPath();
       radarCtx.moveTo(x, y);
-      radarCtx.lineTo(x + rx * 8 * canvasScale, y + rz * 8 * canvasScale);
+      radarCtx.lineTo(x + rx * 4 * canvasScale, y + rz * 4 * canvasScale);
       radarCtx.stroke();
     }
   });
@@ -2426,10 +2442,10 @@ function drawRadar() {
     const { x, y } = toRadar(item.mesh.position.x, item.mesh.position.z);
     
     radarCtx.beginPath();
-    radarCtx.arc(x, y, 3.2 * canvasScale, 0, Math.PI * 2);
+    radarCtx.arc(x, y, 1.2 * canvasScale, 0, Math.PI * 2);
     radarCtx.fillStyle = '#00f0ff';
     radarCtx.shadowColor = '#00f0ff';
-    radarCtx.shadowBlur = 4 * canvasScale;
+    radarCtx.shadowBlur = 2 * canvasScale;
     radarCtx.fill();
   });
 
@@ -2511,13 +2527,13 @@ function drawRadar() {
   radarCtx.translate(cx, cy);
   radarCtx.fillStyle = '#ffffff';
   radarCtx.shadowColor = '#88ffff';
-  radarCtx.shadowBlur = 8 * canvasScale;
+  radarCtx.shadowBlur = 5 * canvasScale;
   
   radarCtx.beginPath();
-  radarCtx.moveTo(0, -9 * canvasScale); // nose
-  radarCtx.lineTo(-6 * canvasScale, 7 * canvasScale);
-  radarCtx.lineTo(0, 4 * canvasScale);
-  radarCtx.lineTo(6 * canvasScale, 7 * canvasScale);
+  radarCtx.moveTo(0, -6 * canvasScale); // nose
+  radarCtx.lineTo(-4 * canvasScale, 5 * canvasScale);
+  radarCtx.lineTo(0, 2.5 * canvasScale);
+  radarCtx.lineTo(4 * canvasScale, 5 * canvasScale);
   radarCtx.closePath();
   radarCtx.fill();
   
@@ -2526,9 +2542,9 @@ function drawRadar() {
     const speedRatio = state.currentSpeed / GAME_CONFIG.player.speed;
     radarCtx.fillStyle = '#ff007f';
     radarCtx.beginPath();
-    radarCtx.moveTo(-3 * canvasScale, 6 * canvasScale);
-    radarCtx.lineTo(0, (6 + 8 * speedRatio) * canvasScale);
-    radarCtx.lineTo(3 * canvasScale, 6 * canvasScale);
+    radarCtx.moveTo(-2 * canvasScale, 4.5 * canvasScale);
+    radarCtx.lineTo(0, (4.5 + 6 * speedRatio) * canvasScale);
+    radarCtx.lineTo(2 * canvasScale, 4.5 * canvasScale);
     radarCtx.closePath();
     radarCtx.fill();
   }
@@ -2536,6 +2552,80 @@ function drawRadar() {
   radarCtx.restore();
 
   radarCtx.restore(); // end clip
+}
+
+function updateBossLockon() {
+  const marker = dom.bossLockon;
+  if (!marker) return;
+
+  if (!state.bossActive || !bossGroup || !playerGroup || state.mode !== 'PLAYING') {
+    marker.style.display = 'none';
+    return;
+  }
+
+  // Project boss 3D position to screen coordinates
+  const tempV = new THREE.Vector3().copy(bossGroup.position);
+  tempV.project(camera);
+
+  // Check if boss is behind the camera (tempV.z > 1)
+  const isBehind = tempV.z > 1;
+
+  // Convert normalized device coordinates [-1, 1] to screen pixels
+  const x = (tempV.x * 0.5 + 0.5) * window.innerWidth;
+  const y = (tempV.y * -0.5 + 0.5) * window.innerHeight;
+
+  marker.style.display = 'block';
+
+  // Compute actual distance between player and boss
+  const distance = Math.round(playerGroup.position.distanceTo(bossGroup.position));
+
+  if (isBehind) {
+    // If target is behind camera, clamp marker to screen edge to guide player
+    const angle = Math.atan2(y - window.innerHeight / 2, x - window.innerWidth / 2);
+    const padding = 45;
+    const borderX = window.innerWidth / 2 + Math.cos(angle) * (window.innerWidth / 2 - padding);
+    const borderY = window.innerHeight / 2 + Math.sin(angle) * (window.innerHeight / 2 - padding);
+    
+    marker.style.left = `${borderX}px`;
+    marker.style.top = `${borderY}px`;
+    marker.classList.add('screen-edge');
+    
+    marker.innerHTML = `
+      <div class="lockon-arrow" style="transform: rotate(${angle + Math.PI / 2}rad)"></div>
+      <div class="lockon-label">BOSS ${distance}m</div>
+    `;
+  } else {
+    // Screen bounds checking for clamp warning pointer
+    const padding = 50;
+    const isOffscreen = (x < padding || x > window.innerWidth - padding || y < padding || y > window.innerHeight - padding);
+    
+    const clampedX = Math.max(padding, Math.min(window.innerWidth - padding, x));
+    const clampedY = Math.max(padding, Math.min(window.innerHeight - padding, y));
+    
+    marker.style.left = `${clampedX}px`;
+    marker.style.top = `${clampedY}px`;
+    
+    if (isOffscreen) {
+      marker.classList.add('screen-edge');
+      const angle = Math.atan2(y - window.innerHeight / 2, x - window.innerWidth / 2);
+      marker.innerHTML = `
+        <div class="lockon-arrow" style="transform: rotate(${angle + Math.PI / 2}rad)"></div>
+        <div class="lockon-label">BOSS ${distance}m</div>
+      `;
+    } else {
+      marker.classList.remove('screen-edge');
+      marker.innerHTML = `
+        <div class="lockon-box">
+          <div class="corner top-left"></div>
+          <div class="corner top-right"></div>
+          <div class="corner bottom-left"></div>
+          <div class="corner bottom-right"></div>
+          <div class="lockon-boss-label">TARGET LOCKED</div>
+          <div class="lockon-boss-dist">${distance}m</div>
+        </div>
+      `;
+    }
+  }
 }
 
 function updateSpeedHud() {
@@ -2615,6 +2705,7 @@ function animate() {
   updateExplosions(dt);
   updateMissiles(dt);
   updateBoss(dt);
+  updateBossLockon();
   updateSpeedHud();
   drawRadar();
 
