@@ -2225,25 +2225,28 @@ function spawnBoss() {
   }
 }
 
-function updateBoss(dt) {
+function updateBoss(dt, dispX = 0, dispZ = 0) {
   if (!state.bossActive || !bossGroup || !playerGroup) return;
 
   // Spin rings
   bossGroup.userData.ring1.rotation.z += bossGroup.userData.ringSpeed1 * dt;
   bossGroup.userData.ring2.rotation.y += bossGroup.userData.ringSpeed2 * dt;
 
-  // Orbit around player in XZ plane
+  // Orbit in front of player (relative to player's heading/yaw) to ensure boss is always visible
   bossGroup.userData.orbitAngle += bossGroup.userData.orbitSpeed * dt;
   const angle = bossGroup.userData.orbitAngle;
-  const r = bossGroup.userData.orbitRadius;
-  const targetX = playerGroup.position.x + Math.cos(angle) * r;
-  const targetZ = playerGroup.position.z + Math.sin(angle) * r;
+  const yaw = playerGroup.rotation.y;
+  
+  // Base offset is 80m ahead of player's heading, with a 30m orbit sweep
+  const targetX = playerGroup.position.x - Math.sin(yaw) * 80 + Math.cos(angle) * 30;
+  const targetZ = playerGroup.position.z - Math.cos(yaw) * 80 + Math.sin(angle) * 30;
+  
   bossGroup.userData.verticalBob += dt;
-  const targetY = playerGroup.position.y + 5 + Math.sin(bossGroup.userData.verticalBob * 0.8) * 8;
+  const targetY = playerGroup.position.y + 4 + Math.sin(bossGroup.userData.verticalBob * 0.8) * 5;
 
-  // Carry over player's speed to prevent boss from getting left behind in deep space
-  bossGroup.position.x += state.velocity.x * dt;
-  bossGroup.position.z += state.velocity.z * dt;
+  // Carry over player's actual displacement (prevent boss escaping when player hits bounds)
+  bossGroup.position.x += dispX;
+  bossGroup.position.z += dispZ;
 
   bossGroup.position.x = THREE.MathUtils.lerp(bossGroup.position.x, targetX, 3.5 * dt);
   bossGroup.position.z = THREE.MathUtils.lerp(bossGroup.position.z, targetZ, 3.5 * dt);
@@ -2725,6 +2728,9 @@ function animate() {
 
   const dt = Math.min(clock.getDelta(), 0.1); // Clamp delta time to avoid huge leaps
   
+  const prevPlayerX = playerGroup ? playerGroup.position.x : 0;
+  const prevPlayerZ = playerGroup ? playerGroup.position.z : 0;
+  
   if (state.mode === 'PLAYING') {
     // Invincibility countdown and blinking visual feedback
     if (state.invincible) {
@@ -2785,8 +2791,10 @@ function animate() {
   updateEnemyProjectiles(dt); // Run enemy bullet movements & hits
   updateItems(dt);
   updateExplosions(dt);
+  const playerDisplacementX = playerGroup ? (playerGroup.position.x - prevPlayerX) : 0;
+  const playerDisplacementZ = playerGroup ? (playerGroup.position.z - prevPlayerZ) : 0;
   updateMissiles(dt);
-  updateBoss(dt);
+  updateBoss(dt, playerDisplacementX, playerDisplacementZ);
   updateBossLockon();
   updateSpeedHud();
   drawRadar();
