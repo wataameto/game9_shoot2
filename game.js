@@ -2239,18 +2239,24 @@ function updateBoss(dt, dispX = 0, dispZ = 0) {
   bossGroup.userData.ring1.rotation.z += bossGroup.userData.ringSpeed1 * dt;
   bossGroup.userData.ring2.rotation.y += bossGroup.userData.ringSpeed2 * dt;
 
-  // Orbit in front of player (relative to player's heading/yaw) to ensure boss is always visible
+  // Orbit in absolute world coordinates (prevent coupling to player's turning angle)
   bossGroup.userData.orbitAngle += bossGroup.userData.orbitSpeed * dt;
   const angle = bossGroup.userData.orbitAngle;
-  const yaw = playerGroup.rotation.y;
-  
   const is2D = state.gameMode === '2D';
-  const orbitDist = is2D ? 18 : 80;
-  const orbitR = is2D ? 6 : 30;
-  
-  // Base offset is ahead of player's heading, with an orbit sweep
-  const targetX = playerGroup.position.x - Math.sin(yaw) * orbitDist + Math.cos(angle) * orbitR;
-  const targetZ = playerGroup.position.z - Math.cos(yaw) * orbitDist + Math.sin(angle) * orbitR;
+  let targetX, targetZ;
+
+  if (is2D) {
+    // 2D Mode: Swing left/right but stay strictly at North (-Z) of the player's position
+    // This keeps boss inside viewport bounds but doesn't stick to the ship's nose when turning
+    const swing = Math.sin(angle) * 12;
+    targetX = playerGroup.position.x + swing;
+    targetZ = playerGroup.position.z - 18;
+  } else {
+    // 3D Mode: Full 360 degree orbit around player in world coordinates
+    const orbitDist = 80;
+    targetX = playerGroup.position.x + Math.cos(angle) * orbitDist;
+    targetZ = playerGroup.position.z + Math.sin(angle) * orbitDist;
+  }
   
   bossGroup.userData.verticalBob += dt;
   const targetY = playerGroup.position.y + 4 + Math.sin(bossGroup.userData.verticalBob * 0.8) * 5;
