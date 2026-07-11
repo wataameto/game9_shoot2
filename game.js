@@ -38,8 +38,8 @@ let state = {
   score: 0,
   highScore: parseInt(localStorage.getItem('neon_starfighter_high') || '0'),
   kills: 0,
-  shield: 100,
-  maxShield: 100,
+  shield: 200,
+  maxShield: 200,
   weaponLevel: 1,
   lastFireTime: 0,
   difficultyMultiplier: 1.0,
@@ -50,6 +50,8 @@ let state = {
   bossActive: false,
   bossHP: 0,
   bossMaxHP: 30,
+  invincible: false,
+  invincibleTime: 0,
 };
 
 // Controls tracking
@@ -1580,7 +1582,11 @@ function triggerScreenFlash(colorRGBA, durationMs) {
 }
 
 function damagePlayer(amount) {
-  if (state.mode !== 'PLAYING') return;
+  if (state.mode !== 'PLAYING' || state.invincible) return;
+
+  // Set invincibility on hit (1.2 seconds)
+  state.invincible = true;
+  state.invincibleTime = 1.2;
 
   state.shield = Math.max(0, state.shield - amount);
   playDamageSound();
@@ -1605,11 +1611,8 @@ function damagePlayer(amount) {
 
   setTimeout(() => {
     clearInterval(shakeTimer);
-    if (state.gameMode === '3D') {
-      camera.position.set(0, 0, 15);
-    } else {
-      camera.position.set(0, 42, -5);
-    }
+    // Restore exact pre-shake positions to prevent camera jumps/teleportation in XZ space
+    camera.position.set(baseCamX, baseCamY, baseCamZ);
   }, 250);
 
   // Downgrade weapon level on hit (adds risk/reward)
@@ -1628,7 +1631,7 @@ function collectPowerup(itemType) {
   playPowerUpSound();
   
   if (itemType === 'SHIELD') {
-    state.shield = Math.min(state.maxShield, state.shield + 35);
+    state.shield = Math.min(state.maxShield, state.shield + 70);
     addScore(150);
     triggerScreenFlash('rgba(57, 255, 20, 0.15)', 200); // Shiny green flash on recovery
   } else if (itemType === 'WEAPON') {
@@ -1656,9 +1659,10 @@ function updateHUD() {
   dom.hudScore.textContent = String(state.score).padStart(6, '0');
   
   // Shield percentage and styling warning class
-  dom.hudShieldBar.style.width = `${state.shield}%`;
+  const shieldPct = (state.shield / state.maxShield) * 100;
+  dom.hudShieldBar.style.width = `${shieldPct}%`;
   
-  if (state.shield <= 30) {
+  if (shieldPct <= 30) {
     dom.hudShieldBar.classList.add('warning');
   } else {
     dom.hudShieldBar.classList.remove('warning');
@@ -1801,8 +1805,10 @@ function startGame(mode = '3D') {
   state.gameMode = mode;
   state.score = 0;
   state.kills = 0;
-  state.shield = 100;
+  state.shield = state.maxShield;
   state.weaponLevel = 1;
+  state.invincible = false;
+  state.invincibleTime = 0;
   state.difficultyMultiplier = Math.max(1.0, 1.0 + (state.stage - 1) * 0.3);
 
   // Reset boss state
@@ -2557,6 +2563,27 @@ function animate() {
   const dt = Math.min(clock.getDelta(), 0.1); // Clamp delta time to avoid huge leaps
   
   if (state.mode === 'PLAYING') {
+    // Invincibility countdown and blinking visual feedback
+    if (state.invincible) {
+      state.invincibleTime -= dt;
+      if (state.invincibleTime <= 0) {
+        state.invincible = false;
+        state.invincibleTime = 0;
+        if (playerGroup) {
+          playerGroup.traverse(child => {
+            if (child.isMesh) child.visible = true;
+          });
+        }
+      } else {
+        const blink = Math.sin(performance.now() * 0.02) > 0;
+        if (playerGroup) {
+          playerGroup.traverse(child => {
+            if (child.isMesh) child.visible = blink;
+          });
+        }
+      }
+    }
+
     if (cameraIntro.active) {
       updateCameraIntro(dt);
       
